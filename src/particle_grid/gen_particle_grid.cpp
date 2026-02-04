@@ -1,5 +1,6 @@
 #include "particle_grid.h"
 #include <cmath>
+#include <fstream>
 #include <boost/math/distributions/normal.hpp>
 
 // Constants and Assumptions
@@ -77,7 +78,7 @@ namespace
     }
 }
 
-std::vector<Particle> getParticleGrid()
+std::vector<Particle> genParticleGrid()
 {
     // Generate Sobol points
     std::vector<Sobolparams> S = extract_Sobolparams("data/particle_grid/new-joe-kuo-6.21201", DIM);
@@ -101,4 +102,23 @@ std::vector<Particle> getParticleGrid()
         }
     }
     return particles;
+}
+
+void saveParticleGrid(const std::string &filename, const std::vector<Particle> &grid)
+{
+    std::ofstream outFile(filename);
+    if (outFile.is_open())
+    {
+        for (const auto &particle : grid)
+        {
+            for (size_t i = 0; i < Particle::n_features; ++i)
+            {
+                outFile << particle.features[i];
+                if (i < Particle::n_features - 1)
+                    outFile << " ";
+            }
+            outFile << "\n";
+        }
+        outFile.close();
+    }
 }

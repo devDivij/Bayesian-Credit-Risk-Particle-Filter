@@ -7,7 +7,8 @@ find_package(Boost REQUIRED)
 add_executable(credit_risk_filter 
     src/main.cpp
     src/particle_grid/gen_particle_grid.cpp
-    src/particle_grid/quasi_random_sequence.cpp)
+    src/particle_grid/quasi_random_sequence.cpp
+    src/debtors/gen_pd.cpp)
 target_link_libraries(credit_risk_filter PRIVATE Boost::boost)
 
 
