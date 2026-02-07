@@ -40,4 +40,5 @@ std::vector<std::vector<double>> Sobolpts(
     int d,
     std::vector<Sobolparams> &S);
 
+void initializeParticleWeights(const std::string &filename, std::vector<Particle> &particles);
 void saveParticleGrid(const std::string &filename, const std::vector<Particle> &grid);

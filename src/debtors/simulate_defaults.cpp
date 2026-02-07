@@ -8,7 +8,10 @@
 
 namespace
 {
-    constexpr int N_ITER = 100;
+    constexpr int N_ITER = 1000;
+
+    // Bin parameters
+    constexpr double TAIL_CONC = 2.0;
     constexpr int MIN_LOSS = 1;
     constexpr int MAX_LOSS = 45000;
     constexpr int N_BINS = 200;
@@ -66,17 +69,15 @@ namespace
 
 }
 
-std::vector<double> genBins()
+std::vector<double> genTailConcentratedBins()
 {
     std::vector<double> bins(N_BINS);
-
-    double step = (MAX_LOSS - MIN_LOSS) / (N_BINS - 1);
-
     for (int i = 0; i < N_BINS; ++i)
     {
-        bins[i] = MIN_LOSS + i * step;
+        double t = static_cast<double>(i) / (N_BINS - 1);
+        double a = std::pow(t, 1.0 / TAIL_CONC);
+        bins[i] = MIN_LOSS + a * (MAX_LOSS - MIN_LOSS);
     }
-
     return bins;
 }
 
@@ -85,7 +86,7 @@ std::vector<std::vector<double>> genParticleLossECDFs()
 {
     std::vector<std::vector<double>> losses = simulateLosses();
     std::vector<std::vector<double>> binned_ecdfs;
-    std::vector<double> bins = genBins();
+    std::vector<double> bins = genTailConcentratedBins();
     binned_ecdfs.reserve(losses.size());
 
     for (auto &l : losses)

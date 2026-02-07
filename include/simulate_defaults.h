@@ -4,7 +4,7 @@
 
 std::vector<std::vector<double>> genParticleLossECDFs();
 
-std::vector<double> genBins();
+std::vector<double> genTailConcentratedBins();
 
 void saveECDFs(const std::string &filename, const std::vector<std::vector<double>> &data);
 

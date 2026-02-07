@@ -104,6 +104,21 @@ std::vector<Particle> genParticleGrid()
     return particles;
 }
 
+void initializeParticleWeights(const std::string &filename, std::vector<Particle> &particles)
+{
+    int n_particles = particles.size();
+    double weight = 1.0 / n_particles;
+    std::ofstream outFile(filename);
+    if (outFile.is_open())
+    {
+        for (int i = 0; i < n_particles; ++i)
+        {
+            outFile << weight << "\n";
+        }
+        outFile.close();
+    }
+}
+
 void saveParticleGrid(const std::string &filename, const std::vector<Particle> &grid)
 {
     std::ofstream outFile(filename);
