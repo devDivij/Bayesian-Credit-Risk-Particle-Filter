@@ -113,7 +113,7 @@ void initializeParticleWeights(const std::string &filename, std::vector<Particle
     {
         for (int i = 0; i < n_particles; ++i)
         {
-            outFile << weight << "\n";
+            outFile << weight << " ";
         }
         outFile.close();
     }

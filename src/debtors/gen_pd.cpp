@@ -7,24 +7,22 @@
 
 namespace
 {
-    constexpr double LAMBDA = 0.01;  // Damping the effect of Crisis Correlation factor
-    constexpr double AVG_PD = 0.025; // Average Probability of Default
+    constexpr double LAMBDA = 0.01; // Damping the effect of Crisis Correlation factor
+    constexpr double INTERCEPT = -13.66;
 
     const std::vector<double> SystematicFactorSensitivities[] = {
-        {-0.012, 0.00, 0.009, 0.008, 0.00},   // Index 0: RETAIL
-        {-0.012, 0.008, 0.004, 0.003, 0.005}, // Index 1: CORPORATE
-        {-0.012, 0.008, 0.004, 0.003, 0.005}, // Index 2: INSTITUTIONS
-        {-0.012, 0.008, 0.004, 0.003, 0.005}, // Index 3: REALESTATE
-        {-0.012, 0.008, 0.004, 0.003, 0.005}, // Index 4: SOVEREIGN
-
+        {-1.20, 0.15, 0.40, 1.50, 0.05}, // RETAIL
+        {-0.90, 0.25, 0.60, 0.80, 0.30}, // CORPORATE
+        {-0.50, 0.10, 0.30, 0.40, 0.10}, // INSTITUTIONS
+        {-1.10, 0.30, 1.80, 1.20, 0.05}, // REALESTATE
+        {-1.50, 0.80, 0.50, 0.20, 0.40}, // SOVEREIGN
     };
     const std::vector<double> IdiosyncraticFactorSensitivities[] = {
-        {0.01, -0.08, 0.09}, // Index 0: RETAIL
-        {0.12, -0.08, 0.04}, // Index 1: CORPORATE
-        {0.12, -0.08, 0.04}, // Index 2: INSTITUTIONS
-        {0.12, -0.08, 0.04}, // Index 3: REALESTATE
-        {0.12, -0.08, 0.04}, // Index 4: SOVEREIGN
-
+        {0.80, -0.50, 1.20}, // RETAIL
+        {1.10, -0.30, 0.90}, // CORPORATE
+        {0.60, -0.20, 0.50}, // INSTITUTIONS
+        {1.40, -0.60, 1.10}, // REALESTATE
+        {0.50, -0.10, 0.40}, // SOVEREIGN
     };
 
     std::vector<Debtor> getDebtorVariables(const std::string &filename)
@@ -67,8 +65,8 @@ std::vector<std::vector<double>> genPDs()
             for (size_t k = 0; k < a.size(); ++k)
                 a[k] += LAMBDA * crisisCorrelation[k];
 
-            double z = a[0] * p.gdp + a[1] * p.inflation + a[2] * p.interest + a[3] * p.unemp + a[4] * p.oilPrice + b[0] * d.feature_1 + b[1] * d.feature_2 + b[2] * d.feature_3;
-            PD[i][j] = AVG_PD * (2 / (1 + std::exp(-z)));
+            double z = INTERCEPT + a[0] * p.gdp + a[1] * p.inflation + a[2] * p.interest + a[3] * p.unemp + a[4] * p.oilPrice + b[0] * d.feature_1 + b[1] * d.feature_2 + b[2] * d.feature_3;
+            PD[i][j] = (1 / (1 + std::exp(-z)));
         }
     }
     return PD;

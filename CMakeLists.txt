@@ -10,7 +10,8 @@ add_executable(credit_risk_filter
     src/particle_grid/quasi_random_sequence.cpp
     src/debtors/gen_pd.cpp
     src/debtors/simulate_defaults.cpp
-    src/risk_measures/run_python.cpp)
+    src/risk_measures/run_python.cpp
+    src/updates/update_weights.cpp)
 target_link_libraries(credit_risk_filter PRIVATE Boost::boost)
 
 target_compile_definitions(credit_risk_filter PRIVATE 
@@ -22,5 +23,13 @@ configure_file(
     COPYONLY
 )
 
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/data" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/saved_state" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+
+file(CREATE_LINK
+     ${CMAKE_SOURCE_DIR}/saved_state
+     ${CMAKE_BINARY_DIR}/saved_state
+     SYMBOLIC)
+     
+file(CREATE_LINK
+     ${CMAKE_SOURCE_DIR}/data
+     ${CMAKE_BINARY_DIR}/data
+     SYMBOLIC)

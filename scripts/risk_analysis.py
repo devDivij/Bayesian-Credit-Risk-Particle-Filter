@@ -10,6 +10,13 @@ def load_ecdfs(ecdf_file):
 
     return ecdfs
 
+def load_weights(weights_file):
+    with open(weights_file, 'r') as f:
+        lines = f.readlines()
+        last_line = lines[-1].strip()  # Get the last line and remove whitespace
+        weights = np.array([float(x) for x in last_line.split()])
+    return weights
+
 def aggregated_loss_dist(ecdfs, weights):
     n_distributions, n_bins = ecdfs.shape
     aggregated_dist = np.zeros(n_bins)
@@ -26,7 +33,7 @@ def ecdf_to_pmf(ecdf):
 def analyze_distribution(ecdf_file, weights_file, bins_file):
 
     bins = np.loadtxt(bins_file)
-    weights = np.loadtxt(weights_file)
+    weights = load_weights(weights_file)
     ecdfs = load_ecdfs(ecdf_file)
 
     loss_dist_ecdf = aggregated_loss_dist(ecdfs, weights)
