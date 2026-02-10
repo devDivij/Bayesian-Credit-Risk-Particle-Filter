@@ -7,34 +7,34 @@
 
 int main()
 {
-    if (hasSavedState())
-    {
-        std::cout << "Existing state detected. Updating weights with new defaults..." << std::endl;
-        updateWeights();
-        PythonAnalyzer::runAnalysis(
-            "saved_state/particle_loss_ecdf.txt",
-            "saved_state/weights.txt",
-            "saved_state/ecdf_bins.txt");
-    }
-    else
-    {
+    // if (hasSavedState())
+    // {
+    //     std::cout << "Existing state detected. Updating weights with new defaults..." << std::endl;
+    //     updateWeights();
+    //     PythonAnalyzer::runAnalysis(
+    //         "saved_state/particle_loss_ecdf.txt",
+    //         "saved_state/weights.txt",
+    //         "saved_state/ecdf_bins.txt");
+    // }
+    // else
+    // {
 
-        std::cout << "No existing state found. Initializing from scratch..." << std::endl;
-        std::vector<Particle> grid = genParticleGrid();
-        std::vector<std::vector<double>> pd = genPDs();
-        saveParticleGrid("saved_state/particle_grid.txt", grid);
-        initializeParticleWeights("saved_state/weights.txt", grid);
-        savePDs("saved_state/debtor_pds.txt", pd);
-        std::vector<std::vector<double>> ecdf = genParticleLossECDFs();
-        std::vector<double> bins = genTailConcentratedBins();
-        saveECDFs("saved_state/particle_loss_ecdf.txt", ecdf);
-        saveBins("saved_state/ecdf_bins.txt", bins);
+    std::cout << "No existing state found. Initializing from scratch..." << std::endl;
+    std::vector<Particle> grid = genParticleGrid();
+    std::vector<std::vector<double>> pd = genPDs();
+    saveParticleGrid("saved_state/particle_grid.txt", grid);
+    initializeParticleWeights("saved_state/weights.txt", grid);
+    savePDs("saved_state/debtor_pds.txt", pd);
+    std::vector<std::vector<double>> ecdf = genParticleLossECDFs();
+    std::vector<double> bins = genTailConcentratedBins();
+    saveECDFs("saved_state/particle_loss_ecdf.txt", ecdf);
+    saveBins("saved_state/ecdf_bins.txt", bins);
 
-        PythonAnalyzer::runAnalysis(
-            "saved_state/particle_loss_ecdf.txt",
-            "saved_state/weights.txt",
-            "saved_state/ecdf_bins.txt");
-    }
+    PythonAnalyzer::runAnalysis(
+        "saved_state/particle_loss_ecdf.txt",
+        "saved_state/weights.txt",
+        "saved_state/ecdf_bins.txt");
+    // }
     return 0;
 }
 

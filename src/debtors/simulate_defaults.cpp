@@ -8,13 +8,13 @@
 
 namespace
 {
-    constexpr int N_ITER = 1000;
+    constexpr int N_ITER = 5000;
 
     // Bin parameters
-    constexpr double TAIL_CONC = 2.0;
+    constexpr double TAIL_CONC = 1.5;
     constexpr int MIN_LOSS = 1;
-    constexpr int MAX_LOSS = 45000;
-    constexpr int N_BINS = 200;
+    constexpr int MAX_LOSS = 150000;
+    constexpr int N_BINS = 400;
 
     const double RecoveryRate[] = {0.4, 0.4, 0.5, 0.7, 0.6};
 

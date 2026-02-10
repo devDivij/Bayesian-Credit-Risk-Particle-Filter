@@ -1,93 +1,162 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 def load_ecdfs(ecdf_file):
-    ecdfs = []
-    with open(ecdf_file, "r") as f:
-        for line in f:
-            ecdfs.append([float(x) for x in line.split()])
-
-    ecdfs = np.array(ecdfs)
-
-    return ecdfs
+    return np.loadtxt(ecdf_file)
 
 def load_weights(weights_file):
     with open(weights_file, 'r') as f:
         lines = f.readlines()
-        last_line = lines[-1].strip()  # Get the last line and remove whitespace
-        weights = np.array([float(x) for x in last_line.split()])
-    return weights
+        if not lines: return np.array([])
+        return np.fromstring(lines[-1], sep=' ')
 
 def aggregated_loss_dist(ecdfs, weights):
-    n_distributions, n_bins = ecdfs.shape
-    aggregated_dist = np.zeros(n_bins)
-
-    for i in range(n_distributions):
-        aggregated_dist += weights[i] * ecdfs[i]
-
-    return aggregated_dist
+    w = weights / np.sum(weights)
+    return np.dot(w, ecdfs)
 
 def ecdf_to_pmf(ecdf):
-    pmf = np.diff(np.concatenate(([0.0], ecdf)))
-    return pmf
+    return np.diff(np.insert(ecdf, 0, 0.0))
 
-def analyze_distribution(ecdf_file, weights_file, bins_file):
+def get_regime(p):
+    gdp, unemp, infl, intr, oil = p
+    scores = np.zeros(4) 
 
-    bins = np.loadtxt(bins_file)
-    weights = load_weights(weights_file)
-    ecdfs = load_ecdfs(ecdf_file)
+    # Crisis (0)
+    scores[0] += (3.0 + abs(gdp)*0.5) if gdp < -3.0 else (1.0 - gdp*0.3 if gdp < 0 else -gdp*0.5)
+    scores[0] += (unemp - 8.0)*0.4 if unemp > 8.0 else ((unemp - 6.0)*0.2 if unemp > 6.0 else -(6.0 - unemp)*0.3)
+    scores[0] += abs(infl)*0.4 if infl < 0 else ((1.0 - infl)*0.2 if infl < 1.0 else -(infl - 1.0)*0.1)
+    scores[0] += (1.0 - intr)*0.3 if intr < 1.0 else ((2.0 - intr)*0.15 if intr < 2.0 else 0)
+    scores[0] += (50.0 - oil)*0.02 if oil < 50.0 else 0
+    if gdp < -2.0 and infl > 5.0 and oil < 80.0: scores[0] -= 3.0
+    if gdp < -3.0 and unemp < 5.0: scores[0] -= 5.0
 
-    loss_dist_ecdf = aggregated_loss_dist(ecdfs, weights)
-    loss_dist_ecdf = loss_dist_ecdf / loss_dist_ecdf[-1]
+    # Recession (1)
+    scores[1] += (2.0 - abs(gdp + 0.5)*0.8) if -2.0 <= gdp <= 1.0 else -abs(gdp + 0.5)*0.4
+    scores[1] += (1.5 - abs(unemp - 6.5)*0.3) if 5.5 <= unemp <= 8.0 else -abs(unemp - 6.5)*0.2
+    scores[1] += (1.0 - abs(infl - 1.5)*0.3) if 0.5 <= infl <= 2.5 else -abs(infl - 1.5)*0.2
+    if 1.0 <= intr <= 3.5: scores[1] += 1.0 - abs(intr - 2.0)*0.25
+    if 45.0 <= oil <= 75.0: scores[1] += 0.5
 
-    idx0 = np.searchsorted(loss_dist_ecdf,1.00)
+    # Normal (2)
+    scores[2] += (3.0 - abs(gdp - 2.5)*0.6) if 1.5 <= gdp <= 3.5 else -abs(gdp - 2.5)*0.4
+    scores[2] += (2.0 - abs(unemp - 5.0)*0.4) if 4.0 <= unemp <= 6.0 else -abs(unemp - 5.0)*0.3
+    scores[2] += (2.5 - abs(infl - 2.0)*0.8) if 1.5 <= infl <= 3.0 else -abs(infl - 2.0)*0.5
+    scores[2] += (1.5 - abs(intr - 3.5)*0.3) if 2.5 <= intr <= 4.5 else -abs(intr - 3.5)*0.2
+    if 55.0 <= oil <= 85.0: scores[2] += 1.0 - abs(oil - 70.0)*0.02
 
-    loss_dist_ecdf.resize(idx0+1,refcheck=False)
-    bins.resize(idx0+1,refcheck=False)
+    # Expansion (3)
+    scores[3] += (2.0 + (gdp - 3.5)*0.6) if gdp > 3.5 else ((gdp - 2.5)*1.5 if gdp > 2.5 else -(2.5 - gdp)*0.5)
+    scores[3] += (4.0 - unemp)*0.8 if unemp < 4.0 else ((5.0 - unemp)*0.4 if unemp < 5.0 else -(unemp - 5.0)*0.6)
+    scores[3] += (2.0 - abs(infl - 2.5)*0.4) if 1.8 <= infl <= 3.5 else (0.5 if 3.5 <= infl <= 5.0 else (-(1.8 - infl)*0.3 if infl < 1.8 else -(infl - 5.0)*0.6))
+    scores[3] += (1.5 - abs(intr - 4.5)*0.2) if 3.0 <= intr <= 6.0 else (-(3.0 - intr)*0.3 if intr < 3.0 else 0)
+    scores[3] += ((oil - 65.0)*0.02) if 65.0 <= oil <= 95.0 else (0.6 if oil > 95.0 else 0)
 
-    loss_dist_pmf = ecdf_to_pmf(loss_dist_ecdf)
-    loss_dist_pmf = loss_dist_pmf / np.sum(loss_dist_pmf)
-    results = {}
+    return np.argmax(scores)
 
-    # Expected Loss
-    EL = np.sum(loss_dist_pmf*bins)
+def analyze_distribution(ecdfs, weights, bins):
+    if len(ecdfs) == 0:
+        return None
 
-    # Unexpected Loss
-    UL = np.sqrt(np.sum(loss_dist_pmf*(bins-EL)**2))
-
-    # Value-at-Risk
-    idx1 = np.searchsorted(loss_dist_ecdf, 0.99)
-    idx2 = np.searchsorted(loss_dist_ecdf, 0.95)
-    idx3 = np.searchsorted(loss_dist_ecdf, 0.999)
-    VaR_99= bins[idx1]
-    VaR_95= bins[idx2]
-    VaR_999= bins[idx3]
-
+    agg_ecdf = aggregated_loss_dist(ecdfs, weights)
+    pmf = ecdf_to_pmf(agg_ecdf)
+    
+    el = np.sum(pmf * bins)
+    ul = np.sqrt(np.sum(pmf * (bins - el)**2))
+    
+    # Better VaR calculation with linear interpolation
+    def interpolate_var(ecdf, bins, percentile):
+        idx = np.searchsorted(ecdf, percentile)
+        
+        if idx == 0:
+            return bins[0]
+        if idx >= len(bins):
+            return bins[-1]
+            
+        # Linear interpolation between bins
+        if ecdf[idx] == ecdf[idx-1]:  # Flat region
+            return bins[idx]
+        
+        # Interpolate
+        weight = (percentile - ecdf[idx-1]) / (ecdf[idx] - ecdf[idx-1])
+        return bins[idx-1] + weight * (bins[idx] - bins[idx-1])
+    
+    var_95 = interpolate_var(agg_ecdf, bins, 0.95)
+    var_99 = interpolate_var(agg_ecdf, bins, 0.99)
+    var_999 = interpolate_var(agg_ecdf, bins, 0.999)
+    
     # Expected Shortfall
-    ES = np.sum(loss_dist_pmf[idx1:idx0+1]*bins[idx1:idx0+1])/np.sum(loss_dist_pmf[idx1:idx0+1])
+    tail_idx = np.searchsorted(agg_ecdf, 0.99)
+    tail_pmf = pmf[tail_idx:]
+    tail_bins = bins[tail_idx:]
+    
+    if np.sum(tail_pmf) > 0:
+        es_99 = np.sum(tail_pmf * tail_bins) / np.sum(tail_pmf)
+    else:
+        es_99 = var_99
 
-    # Economic Capital
-    EC = VaR_999 - EL
+    return {
+        "EL": el,
+        "UL": ul,
+        "ES": es_99,
+        "VaR_95": var_95,
+        "VaR_99": var_99,
+        "VaR_999": var_999,
+        "EC": var_999 - el,
+        "Tail_ratio": var_999 / var_99 if var_99 > 0 else 1.0
+    }
+def segregate_regimes(ecdfs, weights, regimes):
+    ecdf_dict = {}
+    weights_dict = {}
+    for i in range(4):
+        ecdf_dict[i] = ecdfs[regimes == i]
+        weights_dict[i] = weights[regimes == i]
+    return ecdf_dict, weights_dict
 
-    results["EL"] = EL
-    results["UL"] = UL
-    results["ES"] = ES
-    results["VaR_99"] = VaR_99
-    results["VaR_95"] = VaR_95
-    results["EC"] = EC
-    results["Tail_ratio"] = VaR_999/VaR_99
+def plot_regime_distributions(ecdf_dict, weights_dict, bins, global_results):
+    regime_names = ['Crisis', 'Recession', 'Normal', 'Expansion']
+    colors = ['#d62728', '#ff7f0e', '#2ca02c', '#1f77b4'] # Red, Orange, Green, Blue
+    
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10), sharex=True)
+    axes = axes.flatten()
+    
+    for i, name in enumerate(regime_names):
+        if len(ecdf_dict[i]) == 0:
+            axes[i].text(0.5, 0.5, "No Data for Regime", ha='center')
+            continue
+            
+        # Get distribution data
+        agg_ecdf = aggregated_loss_dist(ecdf_dict[i], weights_dict[i])
+        pmf = ecdf_to_pmf(agg_ecdf)
+        res = analyze_distribution(ecdf_dict[i], weights_dict[i], bins)
+        
+        # Plot PMF (The 'Shape' of risk)
+        axes[i].fill_between(bins, pmf, color=colors[i], alpha=0.3, label='Loss Density')
+        axes[i].plot(bins, pmf, color=colors[i], lw=1.5)
+        
+        # Add vertical lines for key risk metrics
+        axes[i].axvline(res['EL'], color='black', linestyle='--', label=f"EL: {res['EL']:.2f}")
+        axes[i].axvline(res['VaR_99'], color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {res['VaR_99']:.2f}")
+        
+        axes[i].set_title(f"Regime: {name} (N={len(ecdf_dict[i])})")
+        axes[i].set_ylabel("Probability")
+        axes[i].legend(loc='upper right', fontsize='small')
+        axes[i].grid(axis='y', alpha=0.3)
 
-    return results
-
+    plt.suptitle("Loss Distributions by Economic Regime", fontsize=16)
+    plt.xlabel("Loss Magnitude")
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
 
 
 if __name__ == "__main__":
-    results = analyze_distribution(
-        ecdf_file="saved_state/particle_loss_ecdf.txt",
-        weights_file="saved_state/weights.txt",
-        bins_file="saved_state/ecdf_bins.txt"
-    )
+    ecdfs = load_ecdfs("saved_state/particle_loss_ecdf.txt")
+    weights = load_weights("saved_state/weights.txt")
+    data = np.loadtxt('./saved_state/particle_grid.txt')
+    bins = np.loadtxt('./saved_state/ecdf_bins.txt')
+    regimes = np.array([get_regime(row) for row in data])
 
-    # Mapping from shorthand to descriptive label
+    ecdf_dict, weights_dict = segregate_regimes(ecdfs, weights, regimes)
+
     labels = {
         "EL": "Expected Loss",
         "UL": "Unexpected Loss",
@@ -97,7 +166,35 @@ if __name__ == "__main__":
         "EC": "Economic Capital",
         "Tail_ratio": "Tail Ratio (VaR_99.9 / VaR_99)"
     }
+    regime_names = ['Crisis','Recession','Normal','Expansion']
 
+    print(f"Total particles: {len(ecdfs)}")
+    print(f"Regime distribution: {np.bincount(regimes)}")
+    print(f"\nWeights sum check:")
+    for regime in range(4):
+        print(f"  {regime_names[regime]}: {np.sum(weights_dict[regime]):.4f} "
+            f"({len(ecdf_dict[regime])} particles)")
+
+    for regime in range(4):
+        print(f"Regime {regime_names[regime]}:")
+        regime_results = analyze_distribution(
+            ecdf_dict[regime],
+            weights_dict[regime],
+            bins
+        )
+        for key in labels:
+            if key in regime_results:
+                print(f"{labels[key]}: {round(regime_results[key], 4)}")
+        print("\n\n")
+    results = analyze_distribution(
+        ecdfs,
+        weights,
+        bins
+    )
+    print(f"Overall Portfolio:")
     for key in labels:
         if key in results:
             print(f"{labels[key]}: {round(results[key], 4)}")
+    plot_regime_distributions(ecdf_dict, weights_dict, bins, results)
+
+
