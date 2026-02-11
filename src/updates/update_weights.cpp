@@ -11,7 +11,7 @@
 namespace
 {
     constexpr double EPS = 1e-10;
-    constexpr double TEMPERING = 0.01;
+    constexpr double TEMPERING = 0.3;
 
     std::vector<double> loadWeights(const std::string &f)
     {
@@ -156,19 +156,10 @@ void updateWeights()
         sum += updated_weights[i];
     }
 
-    double sum_sq = 0.0;
     for (size_t i = 0; i < weights.size(); ++i)
     {
         updated_weights[i] /= sum;
-        sum_sq += updated_weights[i] * updated_weights[i];
     }
-
-    double ess = 1.0 / sum_sq;
-    std::cout << "Effective Sample Size (ESS): " << ess << " / " << weights.size() << std::endl;
-    std::cout << "ESS ratio: " << (ess / weights.size()) * 100 << "%" << std::endl;
-
-    if (ess < weights.size() * 0.5)
-        std::cout << "WARNING: Low ESS - consider resampling particles!" << std::endl;
 
     saveWeights(updated_weights);
     std::cout << "Weight update complete!" << std::endl;

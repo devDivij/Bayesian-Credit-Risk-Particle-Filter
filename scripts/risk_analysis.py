@@ -105,14 +105,14 @@ def analyze_distribution(ecdfs, weights, bins):
         "Tail_ratio": var_999 / var_99 if var_99 > 0 else 1.0
     }
 def segregate_regimes(ecdfs, weights, regimes):
-    ecdf_dict = {}
-    weights_dict = {}
+    ecdf_list = []
+    weights_list = []
     for i in range(4):
-        ecdf_dict[i] = ecdfs[regimes == i]
-        weights_dict[i] = weights[regimes == i]
-    return ecdf_dict, weights_dict
+        ecdf_list.append(ecdfs[regimes == i])
+        weights_list.append(weights[regimes == i])
+    return ecdf_list, weights_list
 
-def plot_regime_distributions(ecdf_dict, weights_dict, bins, global_results):
+def plot_regime_distributions(ecdf_list, weights_list, bins, global_results):
     regime_names = ['Crisis', 'Recession', 'Normal', 'Expansion']
     colors = ['#d62728', '#ff7f0e', '#2ca02c', '#1f77b4'] # Red, Orange, Green, Blue
     
@@ -120,14 +120,14 @@ def plot_regime_distributions(ecdf_dict, weights_dict, bins, global_results):
     axes = axes.flatten()
     
     for i, name in enumerate(regime_names):
-        if len(ecdf_dict[i]) == 0:
+        if len(ecdf_list[i]) == 0:
             axes[i].text(0.5, 0.5, "No Data for Regime", ha='center')
             continue
-            
+        
         # Get distribution data
-        agg_ecdf = aggregated_loss_dist(ecdf_dict[i], weights_dict[i])
+        agg_ecdf = aggregated_loss_dist(ecdf_list[i], weights_list[i])
         pmf = ecdf_to_pmf(agg_ecdf)
-        res = analyze_distribution(ecdf_dict[i], weights_dict[i], bins)
+        res = analyze_distribution(ecdf_list[i], weights_list[i], bins)
         
         # Plot PMF (The 'Shape' of risk)
         axes[i].fill_between(bins, pmf, color=colors[i], alpha=0.3, label='Loss Density')
@@ -137,7 +137,7 @@ def plot_regime_distributions(ecdf_dict, weights_dict, bins, global_results):
         axes[i].axvline(res['EL'], color='black', linestyle='--', label=f"EL: {res['EL']:.2f}")
         axes[i].axvline(res['VaR_99'], color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {res['VaR_99']:.2f}")
         
-        axes[i].set_title(f"Regime: {name} (N={len(ecdf_dict[i])})")
+        axes[i].set_title(f"Regime: {name} (N={len(ecdf_list[i])})")
         axes[i].set_ylabel("Probability")
         axes[i].legend(loc='upper right', fontsize='small')
         axes[i].grid(axis='y', alpha=0.3)
@@ -147,6 +147,23 @@ def plot_regime_distributions(ecdf_dict, weights_dict, bins, global_results):
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
+def plot_aggregated_distribution(ecdfs, weights, bins, results):
+    agg_ecdf = aggregated_loss_dist(ecdfs, weights)
+    pmf = ecdf_to_pmf(agg_ecdf)
+
+    plt.figure(figsize=(10, 6))
+    plt.fill_between(bins, pmf, color='purple', alpha=0.3, label='Aggregated Loss Density')
+    plt.plot(bins, pmf, color='purple', lw=1.5)
+
+    plt.axvline(results['EL'], color='black', linestyle='--', label=f"EL: {results['EL']:.2f}")
+    plt.axvline(results['VaR_99'], color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {results['VaR_99']:.2f}")
+
+    plt.title("Aggregated Loss Distribution")
+    plt.xlabel("Loss Magnitude")
+    plt.ylabel("Probability")
+    plt.legend(loc='upper right')
+    plt.grid(axis='y', alpha=0.3)
+    plt.show()
 
 if __name__ == "__main__":
     ecdfs = load_ecdfs("saved_state/particle_loss_ecdf.txt")
@@ -155,7 +172,7 @@ if __name__ == "__main__":
     bins = np.loadtxt('./saved_state/ecdf_bins.txt')
     regimes = np.array([get_regime(row) for row in data])
 
-    ecdf_dict, weights_dict = segregate_regimes(ecdfs, weights, regimes)
+    ecdf_list, weights_list = segregate_regimes(ecdfs, weights, regimes)
 
     labels = {
         "EL": "Expected Loss",
@@ -168,18 +185,26 @@ if __name__ == "__main__":
     }
     regime_names = ['Crisis','Recession','Normal','Expansion']
 
-    print(f"Total particles: {len(ecdfs)}")
-    print(f"Regime distribution: {np.bincount(regimes)}")
-    print(f"\nWeights sum check:")
-    for regime in range(4):
-        print(f"  {regime_names[regime]}: {np.sum(weights_dict[regime]):.4f} "
-            f"({len(ecdf_dict[regime])} particles)")
+    print(f"\nTotal particles: {len(ecdfs)}\n")
+
+    max_weight = np.max([np.sum(row) for row in weights_list])
+    max_width = 40
+    print("Regime Weight Distribution:")
+    print("-" * 55)
+
+    for regime in regime_names:
+        weight = np.sum(weights_list[regime_names.index(regime)])
+        bar_length = int((weight / max_weight) * max_width)
+        bar = "#" * bar_length
+        print(f"{regime:<10} | {bar} ({round(weight,3)})")
+
+    print("-" * 55 + '\n')
 
     for regime in range(4):
         print(f"Regime {regime_names[regime]}:")
         regime_results = analyze_distribution(
-            ecdf_dict[regime],
-            weights_dict[regime],
+            ecdf_list[regime],
+            weights_list[regime],
             bins
         )
         for key in labels:
@@ -191,10 +216,11 @@ if __name__ == "__main__":
         weights,
         bins
     )
-    print(f"Overall Portfolio:")
+    print(f"Aggregated distribution:")
     for key in labels:
         if key in results:
             print(f"{labels[key]}: {round(results[key], 4)}")
-    plot_regime_distributions(ecdf_dict, weights_dict, bins, results)
-
+    
+    plot_regime_distributions(ecdf_list, weights_list, bins, results)
+    plot_aggregated_distribution(ecdfs, weights, bins, results)
 
