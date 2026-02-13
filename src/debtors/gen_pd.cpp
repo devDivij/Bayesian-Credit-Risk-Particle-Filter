@@ -1,32 +1,19 @@
-#include "gen_pd.h"
-#include "particle_grid.h"
+#include "gen_pd.hpp"
+#include "model_config.hpp"
+#include "utils.hpp"
 #include <fstream>
 #include <filesystem>
 #include <sstream>
 #include <cmath>
 
+using namespace Constants::DebtorPDs;
+
 namespace
 {
-    constexpr double INTERCEPT = -5.66;
-
-    const std::vector<double> SystematicFactorSensitivities[] = {
-        {-0.12, 0.015, 0.04, 0.15, 0.005}, // RETAIL
-        {-0.09, 0.025, 0.06, 0.08, 0.030}, // CORPORATE
-        {-0.05, 0.010, 0.03, 0.04, 0.010}, // INSTITUTIONS
-        {-0.11, 0.030, 0.18, 0.12, 0.005}, // REALESTATE
-        {-0.15, 0.080, 0.05, 0.02, 0.040}, // SOVEREIGN
-    };
-
-    const std::vector<double> IdiosyncraticFactorSensitivities[] = {
-        {0.08, -0.05, 0.12}, // RETAIL
-        {0.11, -0.03, 0.09}, // CORPORATE
-        {0.06, -0.02, 0.05}, // INSTITUTIONS
-        {0.14, -0.06, 0.11}, // REALESTATE
-        {0.05, -0.01, 0.04}, // SOVEREIGN
-    };
-
     std::vector<Debtor> getDebtorVariables(const std::string &filename)
     {
+        checkFileExists(filename);
+
         std::ifstream file(filename);
 
         std::string line;
@@ -37,17 +24,34 @@ namespace
         {
             std::stringstream ss(line);
             Debtor d;
-            ss >> d.id >> d.feature_1 >> d.feature_2 >> d.feature_3 >> d.EAD >> d.exposure_class;
+            ss >> d.id;
+
+            for (int i = 0; i < Debtor::n_features; ++i)
+            {
+                ss >> d.features[i];
+            }
+
+            ss >> d.EAD >> d.exposure_class;
+
+            if (ss.fail())
+            {
+                std::cerr << "Warning: Malformed line in debtor data file: " << line << std::endl;
+                continue;
+            }
             debtors.push_back(d);
+        }
+
+        if (debtors.empty())
+        {
+            throw std::runtime_error("Error: Debtor data file is empty or invalid.");
         }
         return debtors;
     }
 
 }
 
-std::vector<std::vector<double>> genPDs()
+std::vector<std::vector<double>> genPDs(const std::vector<Particle> &particles)
 {
-    std::vector<Particle> particles = genParticleGrid();
     int n_particles = particles.size();
     std::vector<Debtor> debtors = getDebtorVariables("data/debtors/debtor_data.txt");
     int n_debtors = debtors.size();
@@ -59,11 +63,30 @@ std::vector<std::vector<double>> genPDs()
         for (int j = 0; j < n_debtors; ++j)
         {
             Debtor d = debtors[j];
-            std::vector<double> a = SystematicFactorSensitivities[d.exposure_class];
-            std::vector<double> b = IdiosyncraticFactorSensitivities[d.exposure_class];
+            const double *a = SystematicFactorSensitivities[d.exposure_class];
+            const double *b = IdiosyncraticFactorSensitivities[d.exposure_class];
 
-            double z = INTERCEPT + a[0] * p.gdp + a[1] * p.inflation + a[2] * p.interest + a[3] * p.unemp + a[4] * p.oilPrice + b[0] * d.feature_1 + b[1] * d.feature_2 + b[2] * d.feature_3;
-            PD[i][j] = (1 / (1 + std::exp(-z)));
+            double systematic_factor = 0.0;
+            for (int k = 0; k < Particle::n_features; ++k)
+            {
+                systematic_factor += a[k] * p.features[k];
+            }
+
+            double idiosyncratic_factor = 0.0;
+            for (int k = 0; k < Debtor::n_features; ++k)
+            {
+                idiosyncratic_factor += b[k] * d.features[k];
+            }
+            double z = INTERCEPT + systematic_factor + idiosyncratic_factor;
+
+            if (std::isnan(z))
+            {
+                std::cerr << "Warning: NaN encountered in PD calculation for particle " << i + 1 << ", debtor " << d.id << std::endl;
+            }
+            else
+            {
+                PD[i][j] = (1.0 / (1.0 + std::exp(-z)));
+            }
         }
     }
     return PD;
@@ -71,6 +94,8 @@ std::vector<std::vector<double>> genPDs()
 
 void savePDs(const std::string &filename, const std::vector<std::vector<double>> &data)
 {
+    checkFileExists(filename);
+
     std::ofstream outFile(filename);
     if (outFile.is_open())
     {

@@ -1,4 +1,6 @@
-#include "particle_grid.h"
+#include "particle_grid.hpp"
+#include "model_config.hpp"
+#include "utils.hpp"
 #include <iostream>
 #include <cmath>
 #include <fstream>
@@ -6,11 +8,10 @@
 #include <string>
 #include <sstream>
 
+using namespace Constants::Global;
+
 namespace
 {
-    // Constant definitions
-    constexpr int MSB = 32;
-
     // Helper functions
     std::vector<std::vector<bool>> Sobolmat(std::bitset<MSB> c, int q, int r, std::vector<int> m)
     {
@@ -70,11 +71,83 @@ namespace
         }
         return pos;
     }
+
+    // Validation functions
+    void isValidSobolParams(const Sobolparams &s, const int &dimension)
+    {
+        if (s.m_init.empty())
+        {
+            throw std::invalid_argument("Error: m_init vector is empty for dimension " + std::to_string(dimension));
+        }
+        if (s.q < 0 || s.q > MSB)
+        {
+            throw std::invalid_argument("Error: Invalid q value " + std::to_string(s.q) + " for dimension " + std::to_string(dimension));
+        }
+        if (s.polynomial < 0)
+        {
+            throw std::invalid_argument("Error: Invalid polynomial " + std::to_string(s.polynomial) + " for dimension " + std::to_string(dimension));
+        }
+    }
+
+    void validateInput(const int &n0, const int &npts, const int &d, const std::vector<Sobolparams> &S)
+    {
+        if (n0 <= 0)
+        {
+            throw std::invalid_argument("Error: n0 must be positive, got " + std::to_string(n0));
+        }
+        if (npts <= 0)
+        {
+            throw std::invalid_argument("Error: npts must be positive, got " + std::to_string(npts));
+        }
+        if (d <= 0)
+        {
+            throw std::invalid_argument("Error: dimensions must be positive, got " + std::to_string(d));
+        }
+        if (S.size() != d)
+        {
+            throw std::invalid_argument("Error: Expected " + std::to_string(d) + " parameter sets, got " + std::to_string(S.size()));
+        }
+
+        for (int i = 0; i < d; ++i)
+        {
+            isValidSobolParams(S[i], i);
+        }
+    }
+
+    void isValidSobolSequence(const std::vector<std::vector<double>> &P, const int &n0, const int &npts, const int &d)
+    {
+        if (P.empty())
+        {
+            throw std::runtime_error("Error: Sobol sequence is empty");
+        }
+        if (P.size() != npts)
+        {
+            throw std::runtime_error("Error: Expected " + std::to_string(npts) + " points, got " + std::to_string(P.size()));
+        }
+        if (P[0].size() != d)
+        {
+            throw std::runtime_error("Error: Expected " + std::to_string(d) + " dimensions, got " + std::to_string(P[0].size()));
+        }
+
+        // Check all values are in [0, 1)
+        for (size_t i = 0; i < P.size(); ++i)
+        {
+            for (size_t j = 0; j < P[i].size(); ++j)
+            {
+                if (P[i][j] < 0.0 || P[i][j] >= 1.0)
+                {
+                    throw std::out_of_range("Error: Value " + std::to_string(P[i][j]) + " at point " + std::to_string(i) + ", dimension " + std::to_string(j) + " is outside [0, 1)");
+                }
+            }
+        }
+    }
 }
 
 // Sobol Sequence Generating Algorithm
 std::vector<std::vector<double>> Sobolpts(int n0, int npts, int d, std::vector<Sobolparams> &S)
 {
+    validateInput(n0, npts, d, S);
+
     int nmax = npts + n0 - 1;
     int rmax = 1 + floor(log2(nmax));
     int r = (n0 > 1 ? 1 + floor(log2(n0 - 1)) : 1);
@@ -89,11 +162,11 @@ std::vector<std::vector<double>> Sobolpts(int n0, int npts, int d, std::vector<S
     {
         Sobolparams s = S[i];
         std::bitset<MSB> c(s.polynomial);
-        V[i] = Sobolmat(c, s.q, rmax, s.minit);
+        V[i] = Sobolmat(c, s.q, rmax, s.m_init);
     }
+
     for (int i = 0; i < d; ++i)
     {
-
         for (int m = 0; m < rmax; ++m)
         {
             for (int n = 0; n < rmax; ++n)
@@ -102,6 +175,7 @@ std::vector<std::vector<double>> Sobolpts(int n0, int npts, int d, std::vector<S
             }
         }
     }
+
     int l;
     for (int k = n0; k < nmax; ++k)
     {
@@ -127,21 +201,28 @@ std::vector<std::vector<double>> Sobolpts(int n0, int npts, int d, std::vector<S
             }
         }
     }
+
+    isValidSobolSequence(P, n0, npts, d);
+
     return P;
 }
 
-std::vector<Sobolparams> extract_Sobolparams(const std::string &filename, int dimensions)
+std::vector<Sobolparams> extractSobolparams(const std::string &filename, int dimensions)
 {
+    checkFileExists(filename);
+
     std::ifstream file(filename);
     std::string line;
     std::getline(file, line);
     std::vector<Sobolparams> S;
+
     while (std::getline(file, line))
     {
         std::stringstream ss(line);
         int d, s, a;
         if (!(ss >> d >> s >> a))
             continue;
+
         if (d - 1 <= dimensions)
         {
             std::vector<int> mi_vec;
@@ -150,6 +231,12 @@ std::vector<Sobolparams> extract_Sobolparams(const std::string &filename, int di
             {
                 mi_vec.push_back(value);
             }
+
+            if (mi_vec.empty())
+            {
+                throw std::invalid_argument("Error: Empty m_i vector at dimension " + std::to_string(d - 1));
+            }
+
             S.push_back({a, s, mi_vec});
         }
         else
@@ -157,5 +244,11 @@ std::vector<Sobolparams> extract_Sobolparams(const std::string &filename, int di
             return S;
         }
     }
-    return {};
+
+    if (S.empty())
+    {
+        throw std::runtime_error("Error: No Sobol parameters loaded from file: " + filename);
+    }
+
+    return S;
 }

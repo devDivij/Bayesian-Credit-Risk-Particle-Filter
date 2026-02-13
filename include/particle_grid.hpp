@@ -1,4 +1,6 @@
 #pragma once
+
+#include "model_config.hpp"
 #include <iostream>
 #include <vector>
 #include <bitset>
@@ -8,29 +10,14 @@ struct Sobolparams
 {
     int polynomial;
     int q;
-    std::vector<int> minit;
+    std::vector<int> m_init;
 };
 
-struct Particle
-{
-    static constexpr int n_features = 5;
-    union
-    {
-        struct
-        {
-            double gdp;       // GDP growth rate (%)
-            double unemp;     // Unemployment rate (%)
-            double inflation; // Inflation rate (%)
-            double interest;  // Interest rate (%)
-            double oilPrice;  // Oil price change (%)
-        };
-        double features[5];
-    };
-};
+bool checkEconomicViability(const Particle &p);
 
 std::vector<Particle> genParticleGrid();
 
-std::vector<Sobolparams> extract_Sobolparams(
+std::vector<Sobolparams> extractSobolparams(
     const std::string &filename,
     int dimensions);
 

@@ -2,7 +2,7 @@
 #include <vector>
 #include <string>
 
-std::vector<std::vector<double>> genParticleLossECDFs();
+std::vector<std::vector<double>> genParticleLossECDFs(const std::vector<std::vector<double>> &PDs);
 
 std::vector<double> genTailConcentratedBins();
 

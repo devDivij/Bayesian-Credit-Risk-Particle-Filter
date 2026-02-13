@@ -1,51 +1,69 @@
-#include "simulate_defaults.h"
-#include "gen_pd.h"
+#include "simulate_defaults.hpp"
+#include "model_config.hpp"
+#include "utils.hpp"
 #include <random>
+#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <cmath>
 
+using namespace Constants::SimulateDefaults;
+
 namespace
 {
-    constexpr int N_ITER = 5000;
-
-    // Bin parameters
-    constexpr double TAIL_CONC = 1.5;
-    constexpr int MIN_LOSS = 1;
-    constexpr int MAX_LOSS = 150000;
-    constexpr int N_BINS = 400;
-
-    const double RecoveryRate[] = {0.4, 0.4, 0.5, 0.7, 0.6};
-
-    std::vector<std::pair<int, double>> getExposureAtDefault(const std::string &filename)
+    std::vector<Debtor> getDebtorVariables(const std::string &filename)
     {
+        checkFileExists(filename);
+
         std::ifstream file(filename);
 
         std::string line;
         std::getline(file, line);
-        std::vector<std::pair<int, double>> EAD_vec;
+        std::vector<Debtor> debtors;
 
         while (std::getline(file, line))
         {
             std::stringstream ss(line);
             Debtor d;
-            ss >> d.id >> d.feature_1 >> d.feature_2 >> d.feature_3 >> d.EAD >> d.exposure_class;
-            EAD_vec.push_back({d.exposure_class, d.EAD});
+            ss >> d.id;
+
+            for (int i = 0; i < Debtor::n_features; ++i)
+            {
+                ss >> d.features[i];
+            }
+
+            ss >> d.EAD >> d.exposure_class;
+
+            if (ss.fail())
+            {
+                std::cerr << "Warning: Malformed line in debtor data file: " << line << std::endl;
+                continue;
+            }
+            debtors.push_back(d);
         }
-        return EAD_vec;
+
+        if (debtors.empty())
+        {
+            throw std::runtime_error("Error: Debtor data file is empty or invalid.");
+        }
+        return debtors;
     }
-    std::vector<std::vector<double>> simulateLosses()
+    std::vector<std::vector<double>> simulateLosses(const std::vector<std::vector<double>> &PDs)
     {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<double> dist(0.0, 1.0);
 
-        std::vector<std::vector<double>> PD = genPDs();
-        int n_particles = PD.size();
-        int n_debtors = PD[0].size();
+        int n_particles = PDs.size();
+        int n_debtors = PDs[0].size();
 
-        std::vector<std::pair<int, double>> EAD = getExposureAtDefault("data/debtors/debtor_data.txt");
+        std::vector<Debtor> debtors = getDebtorVariables("data/debtors/debtor_data.txt");
+
+        if (debtors.size() != static_cast<size_t>(n_debtors))
+        {
+            throw std::runtime_error("Dimension mismatch: PD matrix dimensions do not match debtors in file (" + std::to_string(debtors.size()) + ").");
+        }
 
         std::vector<std::vector<double>> losses(n_particles, std::vector<double>(N_ITER, 0.0));
         for (int i = 0; i < n_particles; ++i)
@@ -55,10 +73,18 @@ namespace
                 double loss = 0.0;
                 for (int k = 0; k < n_debtors; ++k)
                 {
-                    double u = dist(gen);
-                    if (u < PD[i][k])
+                    double rr = RecoveryRate[debtors[k].exposure_class];
+
+                    if (rr < 0.0 || rr > 1.0)
                     {
-                        loss += EAD[k].second * (1 - RecoveryRate[EAD[k].first]);
+                        throw std::out_of_range("RecoveryRate must be between 0 and 1 for class: " +
+                                                std::to_string(debtors[k].exposure_class));
+                    }
+
+                    double u = dist(gen);
+                    if (u < PDs[i][k])
+                    {
+                        loss += debtors[k].EAD * (1 - rr);
                     }
                 }
                 losses[i][j] = loss;
@@ -71,6 +97,11 @@ namespace
 
 std::vector<double> genTailConcentratedBins()
 {
+    if (TAIL_CONC <= 0)
+        throw std::invalid_argument("TAIL_CONC must be positive.");
+    if (MAX_LOSS <= MIN_LOSS)
+        throw std::invalid_argument("MAX_LOSS must be greater than MIN_LOSS.");
+
     std::vector<double> bins(N_BINS);
     for (int i = 0; i < N_BINS; ++i)
     {
@@ -82,9 +113,9 @@ std::vector<double> genTailConcentratedBins()
 }
 
 // ECDF: Empirical Cumulative Distrubution Function
-std::vector<std::vector<double>> genParticleLossECDFs()
+std::vector<std::vector<double>> genParticleLossECDFs(const std::vector<std::vector<double>> &PDs)
 {
-    std::vector<std::vector<double>> losses = simulateLosses();
+    std::vector<std::vector<double>> losses = simulateLosses(PDs);
     std::vector<std::vector<double>> binned_ecdfs;
     std::vector<double> bins = genTailConcentratedBins();
     binned_ecdfs.reserve(losses.size());
@@ -96,7 +127,10 @@ std::vector<std::vector<double>> genParticleLossECDFs()
         ecdf.reserve(bins.size());
 
         double n = static_cast<double>(N_ITER);
-
+        if (n <= 0)
+        {
+            throw std::invalid_argument("N_ITER must be greater than 0 to calculate ECDF.");
+        }
         for (const double &threshold : bins)
         {
             auto it = std::upper_bound(l.begin(), l.end(), threshold);
@@ -111,6 +145,14 @@ std::vector<std::vector<double>> genParticleLossECDFs()
 
 void saveECDFs(const std::string &filename, const std::vector<std::vector<double>> &data)
 {
+    checkFileExists(filename);
+
+    if (data.empty())
+    {
+        std::cerr << "Warning: No ECDF data to save to " << filename << std::endl;
+        return;
+    }
+
     std::ofstream outFile(filename);
     if (outFile.is_open())
     {
@@ -130,6 +172,14 @@ void saveECDFs(const std::string &filename, const std::vector<std::vector<double
 
 void saveBins(const std::string &filename, const std::vector<double> bins)
 {
+    checkFileExists(filename);
+
+    if (bins.empty())
+    {
+        std::cerr << "Warning: No bins to save to " << filename << std::endl;
+        return;
+    }
+
     std::ofstream outFile(filename);
     if (outFile.is_open())
     {

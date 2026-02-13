@@ -1,9 +1,9 @@
 #include <iostream>
-#include "particle_grid.h"
-#include "gen_pd.h"
-#include "simulate_defaults.h"
-#include "update_weights.h"
-#include "run_python.h"
+#include "particle_grid.hpp"
+#include "gen_pd.hpp"
+#include "simulate_defaults.hpp"
+#include "update_weights.hpp"
+#include "run_python.hpp"
 
 int main()
 {
@@ -27,12 +27,12 @@ int main()
     {
 
         std::cout << "No existing state found. Initializing from scratch..." << std::endl;
-        std::vector<Particle> grid = genParticleGrid();
-        std::vector<std::vector<double>> pd = genPDs();
-        saveParticleGrid("saved_state/particle_grid.txt", grid);
-        initializeParticleWeights("saved_state/weights.txt", grid);
-        savePDs("saved_state/debtor_pds.txt", pd);
-        std::vector<std::vector<double>> ecdf = genParticleLossECDFs();
+        std::vector<Particle> particles = genParticleGrid();
+        std::vector<std::vector<double>> PDs = genPDs(particles);
+        saveParticleGrid("saved_state/particle_grid.txt", particles);
+        initializeParticleWeights("saved_state/weights.txt", particles);
+        savePDs("saved_state/debtor_pds.txt", PDs);
+        std::vector<std::vector<double>> ecdf = genParticleLossECDFs(PDs);
         std::vector<double> bins = genTailConcentratedBins();
         saveECDFs("saved_state/particle_loss_ecdf.txt", ecdf);
         saveBins("saved_state/ecdf_bins.txt", bins);

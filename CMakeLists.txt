@@ -6,11 +6,13 @@ include_directories(include)
 find_package(Boost REQUIRED)
 add_executable(credit_risk_filter 
     src/main.cpp
+    src/utils.cpp
     src/particle_grid/gen_particle_grid.cpp
     src/particle_grid/quasi_random_sequence.cpp
+    src/particle_grid/check_viability.cpp
     src/debtors/gen_pd.cpp
     src/debtors/simulate_defaults.cpp
-    src/risk_measures/run_python.cpp
+    src/risk_analysis/run_python.cpp
     src/updates/update_weights.cpp)
 target_link_libraries(credit_risk_filter PRIVATE Boost::boost)
 

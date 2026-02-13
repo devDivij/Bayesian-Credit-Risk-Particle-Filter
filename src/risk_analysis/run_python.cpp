@@ -1,18 +1,13 @@
-// Expected Loss: 8435.0682
-// Unexpected Loss (Std Dev): 7227.5178
-// Expected Shortfall (99%): 32841.6042
-// VaR (99%): 29155.0
-// VaR (95%): 21923.0
-// Economic Capital: 29533.9318
-// Tail Ratio (VaR_99.9 / VaR_99): 1.3023
-#include "run_python.h"
+#include "run_python.hpp"
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <filesystem>
 
-namespace fs = std::filesystem;
+#ifndef PYTHON_SCRIPT_DIR
+#define PYTHON_SCRIPT_DIR "."
+#endif
 
 void PythonAnalyzer::runAnalysis(
     const std::string &ecdf_file,
@@ -20,16 +15,22 @@ void PythonAnalyzer::runAnalysis(
     const std::string &bins_file)
 {
 
-// Use the Python script path defined by CMake
-#ifndef PYTHON_SCRIPT_DIR
-#define PYTHON_SCRIPT_DIR "."
-#endif
+    if (!std::filesystem::exists(ecdf_file) ||
+        !std::filesystem::exists(weights_file) ||
+        !std::filesystem::exists(bins_file))
+    {
+        throw std::runtime_error("Required data files for Python analysis are missing.");
+    }
+    if (std::system("python3 --version > /dev/null 2>&1") != 0)
+    {
+        throw std::runtime_error("python3 command not found. Please ensure Python is installed and in your PATH.");
+    }
 
     std::string scriptDir = PYTHON_SCRIPT_DIR;
     std::string scriptPath = scriptDir + "/risk_analysis.py";
     std::string outputPath = scriptDir + "/analysis_results.txt";
 
-    if (!fs::exists(scriptPath))
+    if (!std::filesystem::exists(scriptPath))
     {
         throw std::runtime_error("Python script not found at: " + scriptPath);
     }

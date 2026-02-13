@@ -1,4 +1,6 @@
-#include "update_weights.h"
+#include "update_weights.hpp"
+#include "model_config.hpp"
+#include "utils.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -8,15 +10,16 @@
 #include <vector>
 #include <unordered_set>
 
+using namespace Constants::Global;
+
 namespace
 {
-    constexpr double EPS = 1e-10;
-    constexpr double TEMPERING = 0.3;
-
-    std::vector<double> loadWeights(const std::string &f)
+    std::vector<double> loadWeights(const std::string &filename)
     {
+        checkFileExists(filename);
+
         std::vector<double> weights;
-        std::ifstream file(f);
+        std::ifstream file(filename);
         std::string line, last;
 
         while (std::getline(file, line))
@@ -30,31 +33,35 @@ namespace
         return weights;
     }
 
-    std::vector<std::vector<double>> loadPDs(const std::string &f)
+    std::vector<std::vector<double>> loadPDs(const std::string &filename)
     {
+        checkFileExists(filename);
+
         std::vector<std::vector<double>> PDs;
-        std::ifstream file(f);
+        std::ifstream file(filename);
         std::string line;
 
         while (std::getline(file, line))
         {
-            std::vector<double> conditional_pd;
+            std::vector<double> conditional_pds;
             std::istringstream iss(line);
             double pd;
 
             while (iss >> pd)
-                conditional_pd.push_back(pd);
+                conditional_pds.push_back(pd);
 
-            if (!conditional_pd.empty())
-                PDs.push_back(conditional_pd);
+            if (!conditional_pds.empty())
+                PDs.push_back(conditional_pds);
         }
 
         return PDs;
     }
 
-    void loadDefaults(const std::string &f, std::unordered_set<int> &all_defaults, std::vector<int> &today_defaults)
+    void loadDefaults(const std::string &filename, std::unordered_set<int> &all_defaults, std::unordered_set<int> &today_defaults)
     {
-        std::ifstream file(f);
+        checkFileExists(filename);
+
+        std::ifstream file(filename);
         std::string line, last;
 
         while (std::getline(file, line))
@@ -74,20 +81,15 @@ namespace
             std::istringstream iss(last);
             int id;
             while (iss >> id)
-                today_defaults.push_back(id);
+                today_defaults.insert(id);
         }
     }
 
     double calculateLogLikelihood(
         const std::vector<double> &conditional_pd,
-        const std::vector<int> &today_defaults,
+        const std::unordered_set<int> &today_defaults,
         const std::unordered_set<int> &all_defaults)
     {
-        std::unordered_set<int> today_set(today_defaults.begin(), today_defaults.end());
-        std::vector<char> is_default_today(conditional_pd.size(), 0);
-
-        for (int idx : today_defaults)
-            is_default_today[idx - 1] = 1;
 
         double log_likelihood = 0.0;
 
@@ -95,11 +97,11 @@ namespace
         {
             int debtor_id = i + 1;
 
-            if (all_defaults.count(debtor_id) && !today_set.count(debtor_id))
+            if (all_defaults.count(debtor_id) && !today_defaults.count(debtor_id))
                 continue;
 
             double pd = std::clamp(conditional_pd[i], EPS, 1.0 - EPS);
-            log_likelihood += is_default_today[i] ? std::log(pd) : std::log1p(-pd);
+            log_likelihood += today_defaults.count(debtor_id) ? std::log(pd) : std::log1p(-pd);
         }
 
         return log_likelihood * TEMPERING;
@@ -107,6 +109,8 @@ namespace
 
     void saveWeights(const std::vector<double> &weights)
     {
+        checkFileExists("saved_state/weights.txt");
+
         std::ofstream file("saved_state/weights.txt", std::ios::app);
         file << "\n";
         for (size_t i = 0; i < weights.size(); ++i)
@@ -129,8 +133,20 @@ void updateWeights()
     auto weights = loadWeights("saved_state/weights.txt");
     auto PDs = loadPDs("saved_state/debtor_pds.txt");
 
+    if (weights.empty() || PDs.empty())
+    {
+        std::cerr << "Error: Weights or PDs are empty. Check input files." << std::endl;
+        return;
+    }
+    if (weights.size() != PDs.size())
+    {
+        std::cerr << "Error: Dimension mismatch. Weights: " << weights.size()
+                  << " vs PD sets: " << PDs.size() << std::endl;
+        return;
+    }
+
     std::unordered_set<int> all_defaults;
-    std::vector<int> today_defaults;
+    std::unordered_set<int> today_defaults;
     loadDefaults("data/debtors/defaults.txt", all_defaults, today_defaults);
 
     std::cout << "Loaded " << weights.size() << " weights, " << PDs.size()

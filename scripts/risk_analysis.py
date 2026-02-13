@@ -145,6 +145,7 @@ def plot_regime_distributions(ecdf_list, weights_list, bins, global_results):
     plt.suptitle("Loss Distributions by Economic Regime", fontsize=16)
     plt.xlabel("Loss Magnitude")
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig('./saved_state/regime_loss_distributions.png', dpi=300, transparent=False)
     plt.show()
 
 def plot_aggregated_distribution(ecdfs, weights, bins, results):
@@ -163,6 +164,7 @@ def plot_aggregated_distribution(ecdfs, weights, bins, results):
     plt.ylabel("Probability")
     plt.legend(loc='upper right')
     plt.grid(axis='y', alpha=0.3)
+    plt.savefig('./saved_state/aggregated_loss_distribution.png', dpi=300, transparent=False)
     plt.show()
 
 if __name__ == "__main__":
@@ -170,6 +172,7 @@ if __name__ == "__main__":
     weights = load_weights("saved_state/weights.txt")
     data = np.loadtxt('./saved_state/particle_grid.txt')
     bins = np.loadtxt('./saved_state/ecdf_bins.txt')
+    
     regimes = np.array([get_regime(row) for row in data])
 
     ecdf_list, weights_list = segregate_regimes(ecdfs, weights, regimes)
@@ -221,6 +224,6 @@ if __name__ == "__main__":
         if key in results:
             print(f"{labels[key]}: {round(results[key], 4)}")
     
-    plot_regime_distributions(ecdf_list, weights_list, bins, results)
     plot_aggregated_distribution(ecdfs, weights, bins, results)
+    plot_regime_distributions(ecdf_list, weights_list, bins, results)
 
