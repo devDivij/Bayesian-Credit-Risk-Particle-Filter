@@ -8,7 +8,7 @@ This repository implements a computationally efficient Bayesian credit-risk mode
 
 The complete technical details and methodology are in the `docs/` directory:
 
-- **`docs/Bayesian Credit Risk Particle Filter.pdf`** – Technical Implementation (particle filter, PD logistic regression, loss simulation, Bayesian weight updates, advantages, etc.)
+- **`docs/Technical Write-up.pdf`** – Technical Implementation (particle filter, PD logistic regression, loss simulation, Bayesian weight updates, advantages, etc.)
 - **`docs/Case Study.pdf`** – Full end-to-end example with 500-debtor synthetic portfolio, regime shifts after 2 and 7 defaults, and visual outputs.
 
 **Start here** — the PDFs explain every formula, data flow, and output you will see when running the code.
