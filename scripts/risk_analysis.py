@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 def load_ecdfs(ecdf_file):
     return np.loadtxt(ecdf_file)
@@ -17,41 +18,132 @@ def aggregated_loss_dist(ecdfs, weights):
 def ecdf_to_pmf(ecdf):
     return np.diff(np.insert(ecdf, 0, 0.0))
 
+
+
 def get_regime(p):
     gdp, unemp, infl, intr, oil = p
-    scores = np.zeros(4) 
-
-    # Crisis (0)
-    scores[0] += (3.0 + abs(gdp)*0.5) if gdp < -3.0 else (1.0 - gdp*0.3 if gdp < 0 else -gdp*0.5)
-    scores[0] += (unemp - 8.0)*0.4 if unemp > 8.0 else ((unemp - 6.0)*0.2 if unemp > 6.0 else -(6.0 - unemp)*0.3)
-    scores[0] += abs(infl)*0.4 if infl < 0 else ((1.0 - infl)*0.2 if infl < 1.0 else -(infl - 1.0)*0.1)
-    scores[0] += (1.0 - intr)*0.3 if intr < 1.0 else ((2.0 - intr)*0.15 if intr < 2.0 else 0)
-    scores[0] += (50.0 - oil)*0.02 if oil < 50.0 else 0
-    if gdp < -2.0 and infl > 5.0 and oil < 80.0: scores[0] -= 3.0
-    if gdp < -3.0 and unemp < 5.0: scores[0] -= 5.0
-
-    # Recession (1)
-    scores[1] += (2.0 - abs(gdp + 0.5)*0.8) if -2.0 <= gdp <= 1.0 else -abs(gdp + 0.5)*0.4
-    scores[1] += (1.5 - abs(unemp - 6.5)*0.3) if 5.5 <= unemp <= 8.0 else -abs(unemp - 6.5)*0.2
-    scores[1] += (1.0 - abs(infl - 1.5)*0.3) if 0.5 <= infl <= 2.5 else -abs(infl - 1.5)*0.2
-    if 1.0 <= intr <= 3.5: scores[1] += 1.0 - abs(intr - 2.0)*0.25
-    if 45.0 <= oil <= 75.0: scores[1] += 0.5
-
-    # Normal (2)
-    scores[2] += (3.0 - abs(gdp - 2.5)*0.6) if 1.5 <= gdp <= 3.5 else -abs(gdp - 2.5)*0.4
-    scores[2] += (2.0 - abs(unemp - 5.0)*0.4) if 4.0 <= unemp <= 6.0 else -abs(unemp - 5.0)*0.3
-    scores[2] += (2.5 - abs(infl - 2.0)*0.8) if 1.5 <= infl <= 3.0 else -abs(infl - 2.0)*0.5
-    scores[2] += (1.5 - abs(intr - 3.5)*0.3) if 2.5 <= intr <= 4.5 else -abs(intr - 3.5)*0.2
-    if 55.0 <= oil <= 85.0: scores[2] += 1.0 - abs(oil - 70.0)*0.02
-
-    # Expansion (3)
-    scores[3] += (2.0 + (gdp - 3.5)*0.6) if gdp > 3.5 else ((gdp - 2.5)*1.5 if gdp > 2.5 else -(2.5 - gdp)*0.5)
-    scores[3] += (4.0 - unemp)*0.8 if unemp < 4.0 else ((5.0 - unemp)*0.4 if unemp < 5.0 else -(unemp - 5.0)*0.6)
-    scores[3] += (2.0 - abs(infl - 2.5)*0.4) if 1.8 <= infl <= 3.5 else (0.5 if 3.5 <= infl <= 5.0 else (-(1.8 - infl)*0.3 if infl < 1.8 else -(infl - 5.0)*0.6))
-    scores[3] += (1.5 - abs(intr - 4.5)*0.2) if 3.0 <= intr <= 6.0 else (-(3.0 - intr)*0.3 if intr < 3.0 else 0)
-    scores[3] += ((oil - 65.0)*0.02) if 65.0 <= oil <= 95.0 else (0.6 if oil > 95.0 else 0)
-
+    scores = np.zeros(4)
+    
+    # Crisis (0): Severe contraction, high unemployment, financial stress
+    # Key: GDP deeply negative OR unemployment very high
+    if gdp < -2.0:
+        scores[0] += 5.0 + abs(gdp) * 0.8  # Severe GDP contraction is strong crisis signal
+    elif gdp < 0:
+        scores[0] += 2.0 - gdp * 0.5
+    else:
+        scores[0] -= gdp * 0.6  # Positive GDP argues against crisis
+    
+    if unemp > 9.0:
+        scores[0] += 4.0 + (unemp - 9.0) * 0.5  # Very high unemployment
+    elif unemp > 7.0:
+        scores[0] += 2.0 + (unemp - 7.0) * 0.8
+    else:
+        scores[0] -= (7.0 - unemp) * 0.4
+    
+    # Crisis tends to have deflationary pressure or extreme inflation
+    if infl < 0:
+        scores[0] += 2.0 + abs(infl) * 0.5  # Deflation is crisis signal
+    elif infl > 6.0:
+        scores[0] += 1.5 + (infl - 6.0) * 0.3  # High inflation can indicate crisis
+    
+    # Low interest rates (emergency stimulus) or very high (panic)
+    if intr < 1.0:
+        scores[0] += 1.5
+    elif intr > 8.0:
+        scores[0] += 1.0
+    
+    # Oil collapse can signal crisis
+    if oil < 40.0:
+        scores[0] += (40.0 - oil) * 0.03
+    
+    # Recession (1): Mild contraction, elevated unemployment
+    # Key: GDP near zero or slightly negative, unemployment 6-9%
+    if -2.0 <= gdp <= 1.5:
+        scores[1] += 3.0 - abs(gdp - 0.0) * 0.5  # Peak at GDP=0
+    else:
+        scores[1] -= abs(gdp - 0.0) * 0.4
+    
+    if 6.0 <= unemp <= 9.0:
+        scores[1] += 3.5 - abs(unemp - 7.0) * 0.3  # Peak at 7% unemployment
+    else:
+        scores[1] -= abs(unemp - 7.0) * 0.35
+    
+    if 0.5 <= infl <= 3.0:
+        scores[1] += 1.5 - abs(infl - 1.5) * 0.3
+    else:
+        scores[1] -= abs(infl - 1.5) * 0.25
+    
+    if 1.0 <= intr <= 4.0:
+        scores[1] += 1.0 - abs(intr - 2.5) * 0.2
+    
+    if 45.0 <= oil <= 70.0:
+        scores[1] += 1.0 - abs(oil - 55.0) * 0.02
+    
+    # Normal (2): Steady growth, moderate unemployment, stable inflation
+    # Key: GDP 1.5-3.5%, unemployment 4-6%, inflation 1.5-3%
+    if 1.5 <= gdp <= 3.5:
+        scores[2] += 4.0 - abs(gdp - 2.5) * 0.5  # Peak at 2.5%
+    else:
+        scores[2] -= abs(gdp - 2.5) * 0.5
+    
+    if 4.0 <= unemp <= 6.5:
+        scores[2] += 3.5 - abs(unemp - 5.0) * 0.4  # Peak at 5%
+    else:
+        scores[2] -= abs(unemp - 5.0) * 0.45
+    
+    if 1.5 <= infl <= 3.5:
+        scores[2] += 3.0 - abs(infl - 2.5) * 0.6  # Peak at 2.5% (target inflation)
+    else:
+        scores[2] -= abs(infl - 2.5) * 0.5
+    
+    if 2.5 <= intr <= 5.0:
+        scores[2] += 2.0 - abs(intr - 3.5) * 0.3  # Peak at 3.5%
+    else:
+        scores[2] -= abs(intr - 3.5) * 0.3
+    
+    if 55.0 <= oil <= 85.0:
+        scores[2] += 1.5 - abs(oil - 70.0) * 0.02  # Peak at $70
+    
+    # Expansion (3): Strong growth, low unemployment, rising asset prices
+    # Key: GDP > 3.5%, unemployment < 4.5%
+    if gdp > 3.5:
+        scores[3] += 3.0 + (gdp - 3.5) * 0.7  # Strong positive GDP
+    elif gdp > 2.0:
+        scores[3] += (gdp - 2.0) * 1.2
+    else:
+        scores[3] -= (2.0 - gdp) * 0.6
+    
+    if unemp < 4.5:
+        scores[3] += 4.5 + (4.5 - unemp) * 0.9  # Very low unemployment
+    elif unemp < 6.0:
+        scores[3] += (6.0 - unemp) * 0.5
+    else:
+        scores[3] -= (unemp - 6.0) * 0.7
+    
+    # Expansion can have moderate inflation (overheating) or low (goldilocks)
+    if 1.8 <= infl <= 4.0:
+        scores[3] += 2.0 - abs(infl - 2.5) * 0.3
+    elif infl > 4.0:
+        scores[3] += 0.5 - (infl - 4.0) * 0.4  # Too hot
+    else:
+        scores[3] -= (1.8 - infl) * 0.4
+    
+    if 3.0 <= intr <= 6.0:
+        scores[3] += 1.5 - abs(intr - 4.5) * 0.2
+    else:
+        scores[3] -= abs(intr - 4.5) * 0.25
+    
+    # Rising oil prices during expansion
+    if 70.0 <= oil <= 100.0:
+        scores[3] += (oil - 70.0) * 0.025
+    elif oil > 100.0:
+        scores[3] += 0.75  # Very high oil
+    else:
+        scores[3] -= (70.0 - oil) * 0.02
+    
     return np.argmax(scores)
+
+
 
 def analyze_distribution(ecdfs, weights, bins):
     if len(ecdfs) == 0:
@@ -63,22 +155,20 @@ def analyze_distribution(ecdfs, weights, bins):
     el = np.sum(pmf * bins)
     ul = np.sqrt(np.sum(pmf * (bins - el)**2))
     
-    # Better VaR calculation with linear interpolation
     def interpolate_var(ecdf, bins, percentile):
         idx = np.searchsorted(ecdf, percentile)
         
+        # Checkers
         if idx == 0:
             return bins[0]
         if idx >= len(bins):
             return bins[-1]
             
-        # Linear interpolation between bins
-        if ecdf[idx] == ecdf[idx-1]:  # Flat region
+        if ecdf[idx] == ecdf[idx-1]:
             return bins[idx]
         
-        # Interpolate
-        weight = (percentile - ecdf[idx-1]) / (ecdf[idx] - ecdf[idx-1])
-        return bins[idx-1] + weight * (bins[idx] - bins[idx-1])
+        slope = (percentile - ecdf[idx-1]) / (ecdf[idx] - ecdf[idx-1])
+        return bins[idx-1] + slope * (bins[idx] - bins[idx-1])
     
     var_95 = interpolate_var(agg_ecdf, bins, 0.95)
     var_99 = interpolate_var(agg_ecdf, bins, 0.99)
@@ -95,14 +185,14 @@ def analyze_distribution(ecdfs, weights, bins):
         es_99 = var_99
 
     return {
-        "EL": el,
-        "UL": ul,
-        "ES": es_99,
-        "VaR_95": var_95,
-        "VaR_99": var_99,
-        "VaR_999": var_999,
-        "EC": var_999 - el,
-        "Tail_ratio": var_999 / var_99 if var_99 > 0 else 1.0
+        "EL": f'$ {el:,.0f}',
+        "UL": f'$ {ul:,.0f}',
+        "ES": f'$ {es_99:,.0f}',
+        "VaR_95": f'$ {var_95:,.0f}',
+        "VaR_99": f'$ {var_99:,.0f}',
+        "VaR_999": f'$ {var_999:,.0f}',
+        "EC": f'$ {var_999-el:,.0f}',
+        "Tail_ratio": f'{var_999 / var_99:.3f}'
     }
 def segregate_regimes(ecdfs, weights, regimes):
     ecdf_list = []
@@ -134,9 +224,9 @@ def plot_regime_distributions(ecdf_list, weights_list, bins, global_results):
         axes[i].plot(bins, pmf, color=colors[i], lw=1.5)
         
         # Add vertical lines for key risk metrics
-        axes[i].axvline(res['EL'], color='black', linestyle='--', label=f"EL: {res['EL']:.2f}")
-        axes[i].axvline(res['VaR_99'], color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {res['VaR_99']:.2f}")
-        
+        axes[i].axvline(int(res['EL'].replace('$', '').replace(',', '').strip()), color='black', linestyle='--', label=f"EL: {res['EL']}")
+        axes[i].axvline(int(res['VaR_99'].replace('$', '').replace(',', '').strip()), color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {res['VaR_99']}")
+
         axes[i].set_title(f"Regime: {name} (N={len(ecdf_list[i])})")
         axes[i].set_ylabel("Probability")
         axes[i].legend(loc='upper right', fontsize='small')
@@ -156,8 +246,8 @@ def plot_aggregated_distribution(ecdfs, weights, bins, results):
     plt.fill_between(bins, pmf, color='purple', alpha=0.3, label='Aggregated Loss Density')
     plt.plot(bins, pmf, color='purple', lw=1.5)
 
-    plt.axvline(results['EL'], color='black', linestyle='--', label=f"EL: {results['EL']:.2f}")
-    plt.axvline(results['VaR_99'], color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {results['VaR_99']:.2f}")
+    plt.axvline(int(results['EL'].replace('$', '').replace(',', '').strip()), color='black', linestyle='--', label=f"EL: {results['EL']}")
+    plt.axvline(int(results['VaR_99'].replace('$', '').replace(',', '').strip()), color='red', linestyle='-', alpha=0.6, label=f"VaR 99%: {results['VaR_99']}")
 
     plt.title("Aggregated Loss Distribution")
     plt.xlabel("Loss Magnitude")
@@ -188,7 +278,7 @@ if __name__ == "__main__":
     }
     regime_names = ['Crisis','Recession','Normal','Expansion']
 
-    print(f"\nTotal particles: {len(ecdfs)}\n")
+    print(f"Total particles: {len(ecdfs)}\n")
 
     max_weight = np.max([np.sum(row) for row in weights_list])
     max_width = 40
@@ -203,17 +293,6 @@ if __name__ == "__main__":
 
     print("-" * 55 + '\n')
 
-    for regime in range(4):
-        print(f"Regime {regime_names[regime]}:")
-        regime_results = analyze_distribution(
-            ecdf_list[regime],
-            weights_list[regime],
-            bins
-        )
-        for key in labels:
-            if key in regime_results:
-                print(f"{labels[key]}: {round(regime_results[key], 4)}")
-        print("\n\n")
     results = analyze_distribution(
         ecdfs,
         weights,
@@ -222,7 +301,19 @@ if __name__ == "__main__":
     print(f"Aggregated distribution:")
     for key in labels:
         if key in results:
-            print(f"{labels[key]}: {round(results[key], 4)}")
+            print(f"{labels[key]}: {results[key]}")
+    data = []
+    print("\nRegime wise Distributions:")
+
+    for regime in range(4):
+        regime_results = analyze_distribution(
+            ecdf_list[regime],
+            weights_list[regime],
+            bins
+        )
+        data.append([regime_results[k] for k in labels.keys()])
+    print(tabulate(list(zip(*data)), headers=regime_names, showindex=labels.values(), tablefmt='fancy_grid', stralign="center"))
+    
     
     plot_aggregated_distribution(ecdfs, weights, bins, results)
     plot_regime_distributions(ecdf_list, weights_list, bins, results)

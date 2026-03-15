@@ -42,9 +42,12 @@ namespace Constants
 {
     namespace Global
     {
-        constexpr double EPS = 1e-10;     // Prevent values exploding
-        constexpr int MSB = 32;           // Largest power of 2 required
-        constexpr double TEMPERING = 0.3; // Sensitivity of defaults affecting weights of each particle
+        constexpr double EPS = 1e-10; // Prevent values exploding
+        constexpr int MSB = 32;       // Largest power of 2 required
+
+        // Sensitivity of defaults affecting weights of each particle
+        constexpr double DEFAULT_TEMPERING = 2.0;     // High for defaults
+        constexpr double NON_DEFAULT_TEMPERING = 0.3; // Low for non-defaults
     }
 
     namespace ParticleGrid
@@ -67,13 +70,12 @@ namespace Constants
 
         // {GDP, Unemployment, Inflation, InterestRates, OilPrices}
         inline const double SystematicFactorSensitivities[][Particle::n_features] = {
-            {-0.12, 0.015, 0.04, 0.15, 0.005}, // RETAIL
-            {-0.09, 0.025, 0.06, 0.08, 0.030}, // CORPORATE
-            {-0.05, 0.010, 0.03, 0.04, 0.010}, // INSTITUTIONS
-            {-0.11, 0.030, 0.18, 0.12, 0.005}, // REALESTATE
-            {-0.15, 0.080, 0.05, 0.02, 0.040}, // SOVEREIGN
+            {-0.40, 0.35, 0.10, 0.03, -0.005}, // RETAIL
+            {-0.35, 0.40, 0.15, 0.04, -0.010}, // CORPORATE
+            {-0.20, 0.20, 0.08, 0.03, -0.005}, // INSTITUTIONS
+            {-0.50, 0.45, 0.28, 0.08, -0.005}, // REALESTATE
+            {-0.55, 0.50, 0.12, 0.02, 0.020},  // SOVEREIGN
         };
-
         // {feature_1, feature_2, feature_3}
         inline const double IdiosyncraticFactorSensitivities[][Debtor::n_features] = {
             {0.08, -0.05, 0.12}, // RETAIL
@@ -86,7 +88,7 @@ namespace Constants
     namespace SimulateDefaults
     {
 
-        constexpr int N_ITER = 5000; // No. of iterations simulated for each particle
+        constexpr int N_ITER = 500; // No. of iterations simulated for each particle
 
         // {retail, corporate, institutions, realEstate, sovereign}
         const double RecoveryRate[Debtor::n_exposure_classes] = {0.4, 0.4, 0.5, 0.7, 0.6};

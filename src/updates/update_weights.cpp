@@ -57,7 +57,7 @@ namespace
         return PDs;
     }
 
-    void loadDefaults(const std::string &filename, std::unordered_set<int> &all_defaults, std::unordered_set<int> &today_defaults)
+    void loadDefaults(const std::string &filename, std::unordered_set<int> &all_defaults, std::unordered_set<int> &monthly_defaults)
     {
         checkFileExists(filename);
 
@@ -81,13 +81,13 @@ namespace
             std::istringstream iss(last);
             int id;
             while (iss >> id)
-                today_defaults.insert(id);
+                monthly_defaults.insert(id);
         }
     }
 
     double calculateLogLikelihood(
         const std::vector<double> &conditional_pd,
-        const std::unordered_set<int> &today_defaults,
+        const std::unordered_set<int> &monthly_defaults,
         const std::unordered_set<int> &all_defaults)
     {
 
@@ -97,14 +97,14 @@ namespace
         {
             int debtor_id = i + 1;
 
-            if (all_defaults.count(debtor_id) && !today_defaults.count(debtor_id))
+            if (all_defaults.count(debtor_id) && !monthly_defaults.count(debtor_id))
                 continue;
 
             double pd = std::clamp(conditional_pd[i], EPS, 1.0 - EPS);
-            log_likelihood += today_defaults.count(debtor_id) ? std::log(pd) : std::log1p(-pd);
+            log_likelihood += monthly_defaults.count(debtor_id) ? DEFAULT_TEMPERING * std::log(pd) : NON_DEFAULT_TEMPERING * std::log1p(-pd);
         }
 
-        return log_likelihood * TEMPERING;
+        return log_likelihood;
     }
 
     void saveWeights(const std::vector<double> &weights)
@@ -146,18 +146,18 @@ void updateWeights()
     }
 
     std::unordered_set<int> all_defaults;
-    std::unordered_set<int> today_defaults;
-    loadDefaults("data/debtors/defaults.txt", all_defaults, today_defaults);
+    std::unordered_set<int> monthly_defaults;
+    loadDefaults("data/debtors/defaults.txt", all_defaults, monthly_defaults);
 
     std::cout << "Loaded " << weights.size() << " weights, " << PDs.size()
-              << " PD sets, " << all_defaults.size() << " cumulative defaults, and "
-              << today_defaults.size() << " today's defaults." << std::endl;
+              << " PD sets, "
+              << monthly_defaults.size() << " this month's defaults." << std::endl;
 
     std::vector<double> updated_log_weights(weights.size());
 
     for (size_t i = 0; i < weights.size(); ++i)
     {
-        double log_likelihood = calculateLogLikelihood(PDs[i], today_defaults, all_defaults);
+        double log_likelihood = calculateLogLikelihood(PDs[i], monthly_defaults, all_defaults);
         updated_log_weights[i] = std::log(weights[i] + EPS) + log_likelihood;
     }
 

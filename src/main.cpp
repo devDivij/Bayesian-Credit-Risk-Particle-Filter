@@ -11,9 +11,9 @@ int main()
     {
         std::cout << "Existing state detected." << std::endl;
 
-        bool x;
-        std::cout << "Do you want to update weights with new defaults? (1 for yes, 0 for no): ";
-        std::cin >> x;
+        bool x = 1;
+        // std::cout << "Do you want to update weights with new defaults? (1 for yes, 0 for no): ";
+        // std::cin >> x;
         if (x)
         {
             updateWeights();
